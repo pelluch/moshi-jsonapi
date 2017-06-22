@@ -32,6 +32,10 @@ public abstract class Document<DATA extends ResourceIdentifier> implements Seria
         return true;
     }
 
+    public Map<ResourceIdentifier, Resource> getIncluded() {
+        return included;
+    }
+
     public boolean exclude(Resource resource) {
         if (resource.getContext() == this) {
             resource.setContext(null);

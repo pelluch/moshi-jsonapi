@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.*;
 
+
 import static moe.banana.jsonapi2.MoshiHelper.*;
 
 class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
@@ -19,6 +20,7 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
 
     private final Map<String, FieldAdapter> bindings = new LinkedHashMap<>();
     private final JsonAdapter<JsonBuffer> jsonBufferJsonAdapter;
+    private final Map<String, MapInclude> includeMappings = new HashMap<>();
 
     ResourceAdapter(Class<T> type, Moshi moshi) {
         this.jsonBufferJsonAdapter = moshi.adapter(JsonBuffer.class);
@@ -44,6 +46,10 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
             Json json = field.getAnnotation(Json.class);
             if (json != null) {
                 name = json.name();
+            }
+            MapInclude mapInclude = field.getAnnotation(MapInclude.class);
+            if(mapInclude != null) {
+                includeMappings.put(mapInclude.includeName(), mapInclude);
             }
             if (bindings.containsKey(name)) {
                 throw new IllegalArgumentException("Duplicated field '" + name + "' in [" + type + "].");
@@ -106,11 +112,48 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
     private void readFields(JsonReader reader, Object resource) throws IOException {
         reader.beginObject();
         while (reader.hasNext()) {
-            FieldAdapter fieldAdapter = bindings.get(reader.nextName());
-            if (fieldAdapter != null) {
-                fieldAdapter.readFrom(reader, resource);
+            String next = reader.nextName();
+            if(includeMappings.containsKey(next)) {
+                MapInclude mapInclude = includeMappings.get(next);
+                if(!mapInclude.isArray()) {
+                    String foreignKey = mapInclude.foreignKey();
+                    reader.beginObject();
+                    next = reader.nextName();
+                    if (next.equals("data")) {
+                        reader.beginObject();
+                        next = reader.nextName();
+                        while (!next.equals("id")) {
+                            reader.skipValue();
+                            next = reader.nextName();
+                        }
+                        String id = reader.nextString();
+                        Class<?> c = resource.getClass();
+                        try {
+                            Field foreignField = c.getDeclaredField(foreignKey);
+                            foreignField.setAccessible(true);
+                            try {
+                                foreignField.set(resource, id);
+                            } catch (IllegalAccessException e) {
+                                e.printStackTrace();
+                            }
+                        } catch (NoSuchFieldException e) {
+                            e.printStackTrace();
+                        }
+                        reader.endObject();
+                    } else {
+                        reader.skipValue();
+                    }
+                    reader.endObject();
+                } else {
+                    reader.skipValue();
+                }
             } else {
-                reader.skipValue();
+                FieldAdapter fieldAdapter = bindings.get(next);
+                if (fieldAdapter != null) {
+                    fieldAdapter.readFrom(reader, resource);
+                } else {
+                    reader.skipValue();
+                }
             }
         }
         reader.endObject();
