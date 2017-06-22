@@ -20,7 +20,6 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
 
     private final Map<String, FieldAdapter> bindings = new LinkedHashMap<>();
     private final JsonAdapter<JsonBuffer> jsonBufferJsonAdapter;
-    private final Map<String, MapInclude> includeMappings = new HashMap<>();
 
     ResourceAdapter(Class<T> type, Moshi moshi) {
         this.jsonBufferJsonAdapter = moshi.adapter(JsonBuffer.class);
@@ -33,6 +32,10 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
         }
 
         for (Field field : listFields(type, Resource.class)) {
+            IgnoreField ignoreField = field.getAnnotation(IgnoreField.class);
+            if(ignoreField != null) {
+                continue;
+            }
             int modifiers = field.getModifiers();
             if (Modifier.isTransient(modifiers) || Modifier.isStatic(modifiers)) {
                 // skip transient fields and static fields
@@ -47,10 +50,11 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
             if (json != null) {
                 name = json.name();
             }
-            MapInclude mapInclude = field.getAnnotation(MapInclude.class);
+            /* MapInclude mapInclude = field.getAnnotation(MapInclude.class);
             if(mapInclude != null) {
                 includeMappings.put(mapInclude.includeName(), mapInclude);
             }
+            */
             if (bindings.containsKey(name)) {
                 throw new IllegalArgumentException("Duplicated field '" + name + "' in [" + type + "].");
             }
@@ -112,8 +116,8 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
     private void readFields(JsonReader reader, Object resource) throws IOException {
         reader.beginObject();
         while (reader.hasNext()) {
-            String next = reader.nextName();
-            if(includeMappings.containsKey(next)) {
+            // String next = reader.nextName();
+            /* if(includeMappings.containsKey(next)) {
                 MapInclude mapInclude = includeMappings.get(next);
                 if(!mapInclude.isArray()) {
                     String foreignKey = mapInclude.foreignKey();
@@ -147,15 +151,17 @@ class ResourceAdapter<T extends Resource> extends JsonAdapter<T> {
                 } else {
                     reader.skipValue();
                 }
+
+
+            } else {*/
+            FieldAdapter fieldAdapter = bindings.get(reader.nextName());
+            if (fieldAdapter != null) {
+                fieldAdapter.readFrom(reader, resource);
             } else {
-                FieldAdapter fieldAdapter = bindings.get(next);
-                if (fieldAdapter != null) {
-                    fieldAdapter.readFrom(reader, resource);
-                } else {
-                    reader.skipValue();
-                }
+                reader.skipValue();
             }
         }
+
         reader.endObject();
     }
 

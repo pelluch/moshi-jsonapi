@@ -8,11 +8,7 @@ import java.lang.annotation.Target;
 /**
  * Created by pablo on 6/21/17.
  */
-
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
-public @interface MapInclude {
-    String includeName();
-    String foreignKey();
-    boolean isArray() default false;
+public @interface IgnoreField {
 }
